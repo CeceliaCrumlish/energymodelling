@@ -33,7 +33,9 @@ static_data = {
     "Electricity_price_year_zero": {"value": 0.23, "units": "$/kWh", "source": "EIA"},
     "Natural_gas_emission_coefficient": {"value": 0.18, "units": "kgCO2/kWh", "source": "EPA"},
     "Electricity_emission_coefficient_year_zero": {"value": 0.29, "units": "kgCO2/kWh", "source": "EPA"},
-    "Analysis_time_horizon": {"value": 30, "units": "years", "source": "User"}
+    "Analysis_time_horizon": {"value": 30, "units": "years", "source": "User"},
+    "inflation_rate": {"value": .2}, 
+    "Average_ppsf": {"value": 75, "units": "price per square foot", "source": "https://offices.net/news/nyc-office-space-rental-cost-analysis/#:~:text=in%20rental%20rates.-,Office%20space%20in%20NYC%3A%20A%20cost%20overview,sq%20ft%20in%20Greenwich%20Village."}
 }
 
 
@@ -133,22 +135,29 @@ def run_simulations(years: int, params: Dict[str, Any]) -> list[int]:
     Returns:
         list[int]: list of net 
     """
-    # discount rate: r
-    r = random.randint(5,10) 
-    cashflows_sum = 0 
+    r = random.uniform(0.05, 0.1)  # Discount rate between 5% and 10%
     
     capital_costs = get_capitalcosts(params)
-         
-    for t in range(1, years): 
-        print("hello world")
-        if t == years: 
-            get_resaleval(params) / ((1 + r) ^ (years + 1)) 
-
     
-
-            # cashflows_sum = get_rentalIncome(params) - get_operating_costs(params) get_regulatory_costs(params, t)
+    # Initialize total NPV
+    npv_total = -capital_costs
     
-    # npv = (Capital costs @ t =0) + (sum from t-1 to n of ((rentalIncome_t - Operating Costst - Regulatory Costs_t) / (1 + r)^t)) + (ResaleValue / (1 + r)^n+1)
+    for t in range(1, years + 1):
+        # Calculate rental income and operating/regulatory costs
+        rental_income = get_rentalIncome(params)
+        operating_costs = get_operating_costs(params)
+        regulatory_costs = get_regulatory_costs(params, t)
+        
+        # Cashflow at year t
+        cashflow_t = rental_income - operating_costs - regulatory_costs
+        npv_total += cashflow_t / ((1 + r) ** t)  # Discounted cashflow
+    
+    # Calculate resale value, discounted to present value
+    resale_value = get_resaleval(params)
+    npv_total += resale_value / ((1 + r) ** (years + 1))
+    
+    return npv_total
+    
     
     pass
 
@@ -173,36 +182,18 @@ def fucked_up_heating(params):
     pass
 
 
-def get_rentalIncome(params): 
-    # leasable area * $m^2 * rental rate per year 
+def get_rentalIncome(params: Dict[str, float], t) -> float:
+    """Calculate the annual rental income."""
+    leasable_area = static_data["Percent_leasable_area"]["value"] * static_data["Gross_floor_area"]["value"]
+    
+    leasable_area -= leasable_area * params["leasable_lost"]
+    
+    adjusted_ppsf = static_data["Average_ppsf"]["value"] * (1 + static_data["inflation_rate"]["value"]) ** (t - 1)
 
-    match params['btype']:
-        case "ELECTRIC": 
-            # find percentage leasable 
-            leasable = static_data["Percent_leasable_area"]["value"] - params["leasable_lost"]
-            sqf_leasable = leasable * static_data["Gross_floor_area"]["value"]
-            print(leasable)
-
-            # find square feet leasable 
-            return sqf_leasable * params["rental_income"]
-        
-        case "FLEXIBLE: ": 
-            return 0 
-        
-        case "GAS":
-            return 0 
-
-        case _ : 
-            print(f"incorrectly typed simulation model of")
-            return 0 
-        
+    
+    return leasable_area * adjusted_ppsf
         
     
-        
-        
-
-    pass
-
 def get_operating_costs(params): 
     pass
 
